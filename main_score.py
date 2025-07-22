@@ -17,21 +17,16 @@ mp_drawing = mp.solutions.drawing_utils
 # --- 辅助函数 ---
 def calculate_angle(a, b, c):
     """计算由三个点构成的角度 (b为顶点)"""
-    # 将MediaPipe的关键点转换为numpy数组
     a = np.array([a.x, a.y])
     b = np.array([b.x, b.y])
     c = np.array([c.x, c.y])
     
-    # 计算向量ba和bc
     ba = a - b
     bc = c - b
     
-    # 计算两个向量的点积
-    cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
-    # 计算角度（弧度）
-    angle = np.arccos(cosine_angle)
+    cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6)
+    angle = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
     
-    # 将弧度转换为度数
     return np.degrees(angle)
 
 def is_pose_in_box(pose_landmarks, box, image_shape):
@@ -56,37 +51,58 @@ def calculate_slide_score(pose_landmarks):
     score = 100
     
     landmarks = pose_landmarks.landmark
+    # 获取所有需要的关键点
     shoulder_l = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER]
-    hip_l = landmarks[mp_pose.PoseLandmark.LEFT_HIP]
-    knee_l = landmarks[mp_pose.PoseLandmark.LEFT_KNEE]
     shoulder_r = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER]
+    hip_l = landmarks[mp_pose.PoseLandmark.LEFT_HIP]
     hip_r = landmarks[mp_pose.PoseLandmark.RIGHT_HIP]
+    knee_l = landmarks[mp_pose.PoseLandmark.LEFT_KNEE]
     knee_r = landmarks[mp_pose.PoseLandmark.RIGHT_KNEE]
+    ankle_l = landmarks[mp_pose.PoseLandmark.LEFT_ANKLE]
+    ankle_r = landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE]
+    nose = landmarks[mp_pose.PoseLandmark.NOSE]
 
-    # --- 规则1: 站立检测 (基于角度的改进版) ---
-    # 检查关键点的可见度(置信度)
-    if not all(p.visibility > 0.6 for p in [shoulder_l, hip_l, knee_l, shoulder_r, hip_r, knee_r]):
+    # --- 检查所有关键点的可见度(置信度) ---
+    required_landmarks = [shoulder_l, shoulder_r, hip_l, hip_r, knee_l, knee_r, ankle_l, ankle_r, nose]
+    if not all(p.visibility > 0.6 for p in required_landmarks):
         return "不确定 (关键点被遮挡)"
 
-    # 计算身体两侧的髋关节角度（肩-髋-膝）
-    left_hip_angle = calculate_angle(shoulder_l, hip_l, knee_l)
-    right_hip_angle = calculate_angle(shoulder_r, hip_r, knee_r)
+    # --- 新增规则1: 坐姿是否正确 (髋关节高于膝盖，且膝盖弯曲) ---
+    avg_hip_y = (hip_l.y + hip_r.y) / 2
+    avg_knee_y = (knee_l.y + knee_r.y) / 2
+    avg_knee_angle = (calculate_angle(hip_l, knee_l, ankle_l) + calculate_angle(hip_r, knee_r, ankle_r)) / 2
     
-    # 取平均角度
-    avg_hip_angle = (left_hip_angle + right_hip_angle) / 2
-    print(f"调试信息: 平均髋关节角度 = {avg_hip_angle:.2f} 度")
+    # 在图像坐标系中, y值越小位置越高
+    if avg_hip_y >= avg_knee_y:
+        score -= 20
+        print(f"扣分: 坐姿不正确 (髋关节低于或等于膝盖)")
+    
+    if avg_knee_angle > 160: # 膝盖几乎伸直
+        score -= 15
+        print(f"扣分: 坐姿不正确 (膝盖过于伸直, 角度: {avg_knee_angle:.2f})")
 
-    # 站立时，髋关节角度接近180度。坐着或蹲着时，角度会小得多。
-    # 设定一个阈值，例如150度，来区分站立和非站立姿势。
-    standing_angle_threshold = 130
-    
-    if avg_hip_angle > standing_angle_threshold:
-        score -= 60  # 站立是高风险行为，扣分较多
-        print(f"扣分: 检测到站立姿势 (髋关节角度 {avg_hip_angle:.2f} > {standing_angle_threshold}度)")
-    
-    # --- 规则2: 可以在此添加更多规则 (例如方向检测) ---
+    # --- 新增规则2: 是否头朝下滑行 (脚的Y坐标小于头的Y坐标) ---
+    avg_ankle_y = (ankle_l.y + ankle_r.y) / 2
+    if avg_ankle_y < nose.y:
+        score -= 70 # 这是一个非常危险的行为，扣分最多
+        print(f"扣分: 检测到头朝下滑行!")
 
-    return score
+    # --- 新增规则3: 身体是否面向前方 (通过肩膀的水平宽度判断) ---
+    shoulder_width_x = abs(shoulder_l.x - shoulder_r.x)
+    body_height_y = abs(avg_hip_y - ((shoulder_l.y + shoulder_r.y)/2))
+    
+    # 如果肩膀的水平宽度相对于身体高度来说非常小，说明身体是侧向的
+    if shoulder_width_x / (body_height_y + 1e-6) < 0.3: # 阈值需要实验调整
+        score -= 30
+        print(f"扣分: 身体可能为侧向 (肩宽/身高比过小)")
+
+    # --- 原有的站立检测规则 (基于角度) ---
+    avg_hip_angle = (calculate_angle(shoulder_l, hip_l, knee_l) + calculate_angle(shoulder_r, hip_r, knee_r)) / 2
+    if avg_hip_angle > 130:
+        score -= 60
+        print(f"扣分: 检测到站立姿势 (髋关节角度 {avg_hip_angle:.2f} > 130度)")
+    
+    return max(0, score) # 确保分数不为负
 
 # --- 主处理函数 ---
 def process_image_for_scoring(image_path, conf_threshold, save_output):
