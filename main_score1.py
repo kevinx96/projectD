@@ -6,7 +6,11 @@ import numpy as np
 
 # --- 初始化所有模型 ---
 # 1. 加载您自己训练好的YOLOv8模型 (用于检测游乐设施)
-yolo_model_equipment = YOLO('D:/projectenshu/runs/detect/slide_yolov8m_exp12/weights/last.pt') 
+model_path="D:/projectenshu/runs/detect/slide_yolov8l_exp5/weights/best.pt"
+yolo_model_equipment = YOLO(model_path) 
+print("="*50)
+print(f"[DEBUG] 准备加载模型，使用的路径是: {model_path}")
+print("="*50)
 try:
     # 2. 加载一个标准的YOLOv8模型 (用于检测人)
     yolo_model_person = YOLO('yolov8n.pt') 
@@ -209,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--model', 
         type=str, 
-        default='D:/projectenshu/runs/detect/slide_yolov8s_exp12/weights/last.pt',
+        default='D:/projectenshu/runs/detect/slide_yolov8l_exp5/weights/best.pt',
         help='独自に訓練したYOLOv8遊具検出モデルのパス（.ptファイル）。'
     )
     parser.add_argument('--conf', type=float, default=0.25, help='YOLOv8物体検出の信頼度の閾値（デフォルト: 0.25）。')
