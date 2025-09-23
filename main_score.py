@@ -6,7 +6,7 @@ import numpy as np
 
 # --- 初始化所有模型 ---
 # 加载您自己训练好的YOLOv8模型
-yolo_model = YOLO('D:/project enshu/runs/detect/train2/weights/best.pt') 
+yolo_model = YOLO('D:/projectenshu/runs/detect/slide_yolov8s_exp12/weights/last.pt') 
 
 # 初始化MediaPipe Pose
 mp_pose = mp.solutions.pose
@@ -137,7 +137,7 @@ def process_image_for_scoring(image_path, conf_threshold, save_output):
         cv2.imshow("Scoring Result - No Detections", annotated_image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-        return
+        #return
 
     print(f"YOLOv8检测到 {len(detected_equipments)} 个游乐设施。")
 
