@@ -271,4 +271,3 @@ if __name__ == "__main__":
     print("\nプログラムを終了します。")
     # 线程会自动退出
     cv2.destroyAllWindows()
-
