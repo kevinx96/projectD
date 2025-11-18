@@ -73,6 +73,7 @@ pip install mmdet==3.3.0
 
 # 5. ffmpeg
 conda install ffmpeg -c conda-forge
+(this sometimes fails for no reason. Install manually by zip and insert it in conda env will do.)
 ```
 
 ---
