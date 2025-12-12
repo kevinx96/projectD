@@ -99,7 +99,7 @@ def calculate_slide_score(pose_landmarks):
         score -= 30; deductions.append("減点: 体が横向きの状態")
     avg_hip_angle = (calculate_angle(lm.LEFT_SHOULDER, lm.LEFT_HIP, lm.LEFT_KNEE) + 
                      calculate_angle(lm.RIGHT_SHOULDER, lm.RIGHT_HIP, lm.RIGHT_KNEE)) / 2
-    if avg_hip_angle > 130:
+    if avg_hip_angle > 140:
         score -= 60; deductions.append("減点: 立ち姿勢を検出")
     return max(0, score), deductions
 
